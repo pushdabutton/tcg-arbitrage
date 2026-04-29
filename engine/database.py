@@ -111,51 +111,122 @@ def save_price_point(db_path: Path, pp: PricePoint) -> int:
 
 
 def save_arbitrage_alert(db_path: Path, opp: ArbitrageOpportunity) -> int:
-    """Insert an arbitrage alert, return its row id."""
+    """Insert or update an arbitrage alert, return its row id.
+
+    If an undismissed alert already exists for the same card + buy/sell
+    platform combination, update the prices and timestamp instead of
+    creating a duplicate.
+    """
     conn = get_connection(db_path)
     try:
-        cur = conn.execute(
-            """INSERT INTO arbitrage_alerts
-               (card_name, set_name, buy_platform, buy_price,
-                sell_platform, sell_price, spread_usd, spread_percent,
-                buy_url, sell_url, detected_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        # Check for existing undismissed alert with same card + platform pair
+        existing = conn.execute(
+            """SELECT id FROM arbitrage_alerts
+               WHERE card_name = ? AND set_name = ?
+                 AND buy_platform = ? AND sell_platform = ?
+                 AND dismissed = 0
+               LIMIT 1""",
             (
                 opp.card_name,
                 opp.set_name,
                 opp.buy_platform.value,
-                opp.buy_price,
                 opp.sell_platform.value,
-                opp.sell_price,
-                opp.spread_usd,
-                opp.spread_percent,
-                opp.buy_url,
-                opp.sell_url,
-                opp.detected_at.isoformat(),
             ),
-        )
-        conn.commit()
-        return cur.lastrowid  # type: ignore[return-value]
+        ).fetchone()
+
+        if existing:
+            # Update existing alert with fresh prices
+            conn.execute(
+                """UPDATE arbitrage_alerts
+                   SET buy_price = ?, sell_price = ?,
+                       spread_usd = ?, spread_percent = ?,
+                       buy_url = ?, sell_url = ?,
+                       detected_at = ?
+                   WHERE id = ?""",
+                (
+                    opp.buy_price,
+                    opp.sell_price,
+                    opp.spread_usd,
+                    opp.spread_percent,
+                    opp.buy_url,
+                    opp.sell_url,
+                    opp.detected_at.isoformat(),
+                    existing["id"],
+                ),
+            )
+            conn.commit()
+            return existing["id"]
+        else:
+            # Insert new alert
+            cur = conn.execute(
+                """INSERT INTO arbitrage_alerts
+                   (card_name, set_name, buy_platform, buy_price,
+                    sell_platform, sell_price, spread_usd, spread_percent,
+                    buy_url, sell_url, detected_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    opp.card_name,
+                    opp.set_name,
+                    opp.buy_platform.value,
+                    opp.buy_price,
+                    opp.sell_platform.value,
+                    opp.sell_price,
+                    opp.spread_usd,
+                    opp.spread_percent,
+                    opp.buy_url,
+                    opp.sell_url,
+                    opp.detected_at.isoformat(),
+                ),
+            )
+            conn.commit()
+            return cur.lastrowid  # type: ignore[return-value]
     finally:
         conn.close()
 
 
-def get_latest_prices(db_path: Path, card_name: str, set_name: str) -> list[dict]:
-    """Get the most recent price from each platform for a card."""
+def get_latest_prices(
+    db_path: Path,
+    card_name: str,
+    set_name: str,
+    raw_only: bool = True,
+) -> list[dict]:
+    """Get the most recent price from each platform for a card.
+
+    By default, only returns raw card prices (excludes graded slabs)
+    to prevent confusing price displays in the card grid.
+
+    Args:
+        db_path: Path to the SQLite database.
+        card_name: Card name to look up.
+        set_name: Set name to look up.
+        raw_only: If True (default), exclude graded slab conditions.
+
+    Returns:
+        List of dicts with platform, price_usd, condition, etc.
+    """
     conn = get_connection(db_path)
     try:
+        condition_filter = ""
+        if raw_only:
+            condition_filter = (
+                "AND p.condition NOT IN "
+                "('psa_10', 'psa_9_5', 'psa_9', 'psa_8', 'psa_7') "
+            )
         rows = conn.execute(
-            """SELECT p.*
+            f"""SELECT p.*
                FROM price_points p
                INNER JOIN (
-                   SELECT platform, MAX(scraped_at) as max_scraped
+                   SELECT platform, condition, MAX(scraped_at) as max_scraped
                    FROM price_points
                    WHERE card_name = ? AND set_name = ?
-                   GROUP BY platform
+                     {condition_filter.replace('p.', '')}
+                   GROUP BY platform, condition
                ) latest
                ON p.platform = latest.platform
+                  AND p.condition = latest.condition
                   AND p.scraped_at = latest.max_scraped
-               WHERE p.card_name = ? AND p.set_name = ?""",
+               WHERE p.card_name = ? AND p.set_name = ?
+                 {condition_filter}""",
             (card_name, set_name, card_name, set_name),
         ).fetchall()
         return [dict(r) for r in rows]
@@ -287,21 +358,46 @@ def get_price_history(
     card_name: str,
     set_name: str,
     limit: int = 20,
+    raw_only: bool = True,
 ) -> list[dict]:
     """Get price history for a card across all platforms, most recent first.
 
-    Returns list of dicts with platform, price_usd, scraped_at.
+    By default, only returns raw/ungraded card prices to avoid mixing
+    graded slab prices ($1,000+) with raw card prices ($20) in sparklines.
+
+    Args:
+        db_path: Path to the SQLite database.
+        card_name: Card name to look up.
+        set_name: Set name to look up.
+        limit: Maximum number of records to return.
+        raw_only: If True (default), exclude graded slab conditions
+                  (psa_10, psa_9_5, psa_9, psa_8, psa_7).
+
+    Returns:
+        List of dicts with platform, price_usd, condition, scraped_at.
     """
     conn = get_connection(db_path)
     try:
-        rows = conn.execute(
-            """SELECT platform, price_usd, scraped_at
-               FROM price_points
-               WHERE card_name = ? AND set_name = ?
-               ORDER BY scraped_at DESC
-               LIMIT ?""",
-            (card_name, set_name, limit),
-        ).fetchall()
+        if raw_only:
+            # Only include raw card conditions, exclude graded slabs
+            rows = conn.execute(
+                """SELECT platform, price_usd, condition, scraped_at
+                   FROM price_points
+                   WHERE card_name = ? AND set_name = ?
+                     AND condition NOT IN ('psa_10', 'psa_9_5', 'psa_9', 'psa_8', 'psa_7')
+                   ORDER BY scraped_at DESC
+                   LIMIT ?""",
+                (card_name, set_name, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT platform, price_usd, condition, scraped_at
+                   FROM price_points
+                   WHERE card_name = ? AND set_name = ?
+                   ORDER BY scraped_at DESC
+                   LIMIT ?""",
+                (card_name, set_name, limit),
+            ).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

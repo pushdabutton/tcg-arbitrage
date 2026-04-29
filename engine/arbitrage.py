@@ -2,6 +2,11 @@
 
 Compares prices across platforms and flags opportunities where the same card
 has a significant price difference (configurable threshold, default 20%).
+
+CRITICAL: Only compares like-for-like conditions. A PSA 10 graded slab is a
+fundamentally different product from a raw/ungraded card and must never be
+compared against it. Prices are grouped by (card, set, condition_group)
+before cross-platform comparison.
 """
 
 from __future__ import annotations
@@ -12,9 +17,22 @@ from datetime import datetime, timezone
 from itertools import combinations
 
 from config import settings
-from scraper.models import ArbitrageOpportunity, Platform, PricePoint
+from scraper.models import ArbitrageOpportunity, Condition, Platform, PricePoint
 
 logger = logging.getLogger(__name__)
+
+
+def _condition_group(condition: Condition) -> str:
+    """Map a condition to its comparison group.
+
+    Raw cards (Ungraded, NM, LP, MP, HP, Damaged) compare with each other.
+    Each graded slab tier only compares within its own tier.
+
+    Returns a string key for grouping.
+    """
+    if condition.is_graded:
+        return condition.value  # Each grade is its own group
+    return "raw"  # All raw conditions compare together
 
 
 def detect_arbitrage(
@@ -23,7 +41,10 @@ def detect_arbitrage(
 ) -> list[ArbitrageOpportunity]:
     """Find arbitrage opportunities across platforms.
 
-    Groups price points by card, then compares every platform pair.
+    Groups price points by (card, set, condition_group), then compares
+    every platform pair within each group. Only compares like-for-like:
+    raw vs raw, PSA 10 vs PSA 10, etc.
+
     An opportunity exists when the price on platform A is at least
     `threshold_percent`% lower than on platform B.
 
@@ -37,16 +58,17 @@ def detect_arbitrage(
     if threshold_percent is None:
         threshold_percent = settings.ARBITRAGE_THRESHOLD_PERCENT
 
-    # Group by (card_name, set_name) -> list of price points
-    groups: dict[tuple[str, str], list[PricePoint]] = defaultdict(list)
+    # Group by (card_name, set_name, condition_group) -> list of price points
+    groups: dict[tuple[str, str, str], list[PricePoint]] = defaultdict(list)
     for pp in price_points:
-        key = (pp.card_name, pp.set_name)
+        cg = _condition_group(pp.condition)
+        key = (pp.card_name, pp.set_name, cg)
         groups[key].append(pp)
 
     opportunities: list[ArbitrageOpportunity] = []
 
-    for (card_name, set_name), points in groups.items():
-        # Get best (lowest) price per platform
+    for (card_name, set_name, cond_group), points in groups.items():
+        # Get best (lowest) price per platform within this condition group
         best_by_platform: dict[Platform, PricePoint] = {}
         for pp in points:
             existing = best_by_platform.get(pp.platform)
@@ -77,9 +99,10 @@ def detect_arbitrage(
                     )
                     opportunities.append(opp)
                     logger.info(
-                        "ARBITRAGE: %s (%s) -- Buy on %s @ $%.2f, Sell on %s @ $%.2f [%.1f%%]",
+                        "ARBITRAGE: %s (%s) [%s] -- Buy on %s @ $%.2f, Sell on %s @ $%.2f [%.1f%%]",
                         card_name,
                         set_name,
+                        cond_group,
                         plat_a.value,
                         pp_a.price_usd,
                         plat_b.value,
@@ -103,9 +126,10 @@ def detect_arbitrage(
                     )
                     opportunities.append(opp)
                     logger.info(
-                        "ARBITRAGE: %s (%s) -- Buy on %s @ $%.2f, Sell on %s @ $%.2f [%.1f%%]",
+                        "ARBITRAGE: %s (%s) [%s] -- Buy on %s @ $%.2f, Sell on %s @ $%.2f [%.1f%%]",
                         card_name,
                         set_name,
+                        cond_group,
                         plat_b.value,
                         pp_b.price_usd,
                         plat_a.value,
@@ -117,7 +141,7 @@ def detect_arbitrage(
     opportunities.sort(key=lambda o: o.spread_percent, reverse=True)
 
     logger.info(
-        "Found %d arbitrage opportunities from %d cards across %d platforms",
+        "Found %d arbitrage opportunities from %d card/condition groups across %d platforms",
         len(opportunities),
         len(groups),
         len({pp.platform for pp in price_points}),

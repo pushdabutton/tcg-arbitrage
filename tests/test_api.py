@@ -38,6 +38,10 @@ def test_health(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
+    # eBay removed -- should only have pricecharting and tcgplayer
+    assert "ebay" not in data["platforms"]
+    assert "pricecharting" in data["platforms"]
+    assert "tcgplayer" in data["platforms"]
 
 
 def test_alerts_empty(client):
@@ -70,3 +74,45 @@ def test_dashboard_loads(client):
     assert resp.status_code == 200
     assert "TCG" in resp.text
     assert "Arbitrage" in resp.text
+    # eBay should not appear as a filter option
+    assert 'data-platform="ebay"' not in resp.text
+
+
+def test_scrape_returns_job_id(client):
+    """POST /api/scrape should return a job_id for async polling."""
+    # We mock the scraper to avoid actual HTTP calls
+    import api.routes as routes
+    original = routes._run_scrape_job
+
+    def mock_job(job_id, cards, platforms):
+        routes._scrape_jobs[job_id] = {
+            "status": "complete",
+            "progress": 100,
+            "message": "Done",
+            "price_points_saved": 0,
+            "arbitrage_opportunities": 0,
+            "alerts_stored": 0,
+            "platform_results": {},
+            "cards_scraped": 0,
+            "platforms_scraped": [],
+        }
+
+    with patch.object(routes, "_run_scrape_job", side_effect=mock_job):
+        resp = client.post("/api/scrape?count=1&platforms=pricecharting")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "job_id" in data
+    assert data["status"] == "accepted"
+
+
+def test_scrape_status_not_found(client):
+    resp = client.get("/api/scrape/status/nonexistent")
+    assert resp.status_code == 404
+
+
+def test_scrape_rejects_ebay(client):
+    """eBay is no longer a valid platform."""
+    resp = client.post("/api/scrape?count=1&platforms=ebay")
+    assert resp.status_code == 400
+    assert "ebay" in resp.json()["detail"].lower()

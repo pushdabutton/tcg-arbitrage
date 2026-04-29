@@ -110,6 +110,13 @@
             font-weight: 600;
         }
         .btn-scrape-now:hover { opacity: 0.9; }
+        .btn-warn {
+            background: var(--yellow);
+            border-color: var(--yellow);
+            color: #000;
+            font-weight: 600;
+        }
+        .btn-warn:hover { opacity: 0.9; }
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -355,7 +362,7 @@
         .toast.success { border-color: var(--green); }
         .toast.error { border-color: var(--red); }
 
-        /* Platform filter */
+        /* Platform filter (BUG 5: pure class-based, no hidden checkboxes) */
         .platform-filters {
             display: flex;
             gap: 8px;
@@ -370,6 +377,7 @@
             background: var(--surface);
             color: var(--text-dim);
             transition: all 0.2s;
+            user-select: none;
         }
         .platform-filter.active {
             background: var(--accent);
@@ -379,6 +387,33 @@
         .platform-filter:hover:not(.active) {
             background: var(--surface-hover);
             color: var(--text);
+        }
+
+        /* Progress bar for async scrape */
+        .progress-bar {
+            display: none;
+            width: 100%;
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .progress-bar.active { display: block; }
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        .progress-bar-fill.indeterminate {
+            width: 30%;
+            animation: progress-slide 1.5s ease-in-out infinite;
+        }
+        @keyframes progress-slide {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
         }
 
         /* Mobile responsive */
@@ -440,29 +475,24 @@
         </header>
 
         <div class="actions">
-            <button class="btn btn-scrape-now" id="scrape-now-btn" onclick="triggerScrape(50)">
-                Scrape Now (All 50)
+            <button class="btn btn-scrape-now" id="scrape-now-btn" onclick="triggerScrape(10)">
+                Scrape 10
             </button>
-            <button class="btn btn-primary" onclick="triggerScrape(5)">
-                Quick Scrape (5)
+            <button class="btn btn-warn" onclick="triggerScrape(50)">
+                Full Scrape (50) -- slow
             </button>
-            <button class="btn" onclick="triggerScrape(20)">Scrape 20</button>
             <div class="platform-filters">
                 <span style="font-size: 0.8rem; color: var(--text-dim);">Platforms:</span>
-                <label class="platform-filter active" data-platform="pricecharting">
-                    <input type="checkbox" checked hidden> PC
-                </label>
-                <label class="platform-filter active" data-platform="tcgplayer">
-                    <input type="checkbox" checked hidden> TCGPlayer
-                </label>
-                <label class="platform-filter active" data-platform="ebay">
-                    <input type="checkbox" checked hidden> eBay
-                </label>
+                <span class="platform-filter active" data-platform="pricecharting">PC</span>
+                <span class="platform-filter active" data-platform="tcgplayer">TCGPlayer</span>
             </div>
             <div class="loading" id="loading-indicator">
                 <div class="spinner"></div>
                 <span id="loading-text">Scraping...</span>
             </div>
+        </div>
+        <div class="progress-bar" id="progress-bar">
+            <div class="progress-bar-fill" id="progress-bar-fill"></div>
         </div>
 
         <div class="section-title">
@@ -519,7 +549,7 @@
         {% else %}
         <div class="empty-state" id="empty-alerts">
             <h3>No arbitrage alerts yet</h3>
-            <p>Click "Scrape Now" to fetch prices and detect cross-platform opportunities.</p>
+            <p>Click "Scrape 10" to fetch prices and detect cross-platform opportunities.</p>
             <p style="margin-top:8px;">Multi-source comparison requires data from 2+ platforms.</p>
         </div>
         {% endif %}
@@ -542,8 +572,20 @@
                         <div class="set-name">{{ card.set_name }}</div>
                         <div class="card-prices">
                             {% for p in card.prices %}
-                            <span class="card-price-tag platform-{{ p.platform }}">
-                                {{ p.platform[:3].upper() }} ${{ "%.2f"|format(p.price_usd) }}
+                            {% set plat_short = p.platform[:3].upper() %}
+                            {% set cond_label = p.condition|default('ungraded') %}
+                            {% if cond_label == 'ungraded' %}{% set cond_short = 'Raw' %}
+                            {% elif cond_label == 'near_mint' %}{% set cond_short = 'NM' %}
+                            {% elif cond_label == 'lightly_played' %}{% set cond_short = 'LP' %}
+                            {% elif cond_label == 'psa_10' %}{% set cond_short = 'PSA10' %}
+                            {% elif cond_label == 'psa_9_5' %}{% set cond_short = 'PSA9.5' %}
+                            {% elif cond_label == 'psa_9' %}{% set cond_short = 'PSA9' %}
+                            {% elif cond_label == 'psa_8' %}{% set cond_short = 'PSA8' %}
+                            {% elif cond_label == 'psa_7' %}{% set cond_short = 'PSA7' %}
+                            {% else %}{% set cond_short = cond_label[:3].upper() %}
+                            {% endif %}
+                            <span class="card-price-tag platform-{{ p.platform }}" title="{{ p.platform }} - {{ cond_label }}">
+                                {{ plat_short }}-{{ cond_short }} ${{ "%.2f"|format(p.price_usd) }}
                             </span>
                             {% endfor %}
                         </div>
@@ -590,9 +632,9 @@
         {% endif %}
 
         <footer>
-            TCG Arbitrage Tool v0.3.0 &middot;
-            Data from PriceCharting, TCGPlayer, eBay &middot;
-            Sorted by spread % (highest first)
+            TCG Arbitrage Tool v0.4.0 &middot;
+            Data from PriceCharting, TCGPlayer &middot;
+            Condition-aware comparison (raw vs raw only)
         </footer>
     </div>
 
@@ -600,7 +642,7 @@
     <div class="toast" id="toast"></div>
 
     <script>
-        // ---- Platform filter state ----
+        // ---- Platform filter state (BUG 5: pure class-based, no hidden inputs) ----
         function getSelectedPlatforms() {
             const filters = document.querySelectorAll('.platform-filter');
             const selected = [];
@@ -613,7 +655,8 @@
         }
 
         document.querySelectorAll('.platform-filter').forEach(f => {
-            f.addEventListener('click', () => {
+            f.addEventListener('click', (e) => {
+                e.preventDefault();
                 f.classList.toggle('active');
             });
         });
@@ -649,10 +692,15 @@
             lastScrapeEl.title = raw;
         }
 
-        // ---- Scrape trigger ----
+        // ---- Async scrape with polling (BUG 6) ----
+        let currentJobId = null;
+        let pollInterval = null;
+
         async function triggerScrape(count) {
             const loading = document.getElementById('loading-indicator');
             const loadingText = document.getElementById('loading-text');
+            const progressBar = document.getElementById('progress-bar');
+            const progressFill = document.getElementById('progress-bar-fill');
             const platforms = getSelectedPlatforms();
 
             if (platforms.length === 0) {
@@ -663,32 +711,79 @@
             // Disable buttons during scrape
             document.querySelectorAll('.btn').forEach(b => b.disabled = true);
             loading.classList.add('active');
-            loadingText.textContent = `Scraping ${count} cards on ${platforms.join(', ')} (~${count * 2}s)...`;
+            progressBar.classList.add('active');
+            progressFill.classList.add('indeterminate');
+            loadingText.textContent = `Starting scrape of ${count} cards...`;
 
             try {
                 const platformQuery = platforms.map(p => `platforms=${p}`).join('&');
                 const resp = await fetch(`/api/scrape?count=${count}&${platformQuery}`, { method: 'POST' });
                 const data = await resp.json();
 
-                if (resp.ok) {
-                    showToast(
-                        `Scrape complete: ${data.price_points_saved} prices, ${data.arbitrage_opportunities} opportunities`,
-                        'success'
-                    );
-                    loadingText.textContent =
-                        `Done! ${data.price_points_saved} prices, ${data.arbitrage_opportunities} opportunities`;
+                if (resp.ok && data.job_id) {
+                    // Async mode: poll for completion
+                    currentJobId = data.job_id;
+                    loadingText.textContent = `Scraping ${count} cards on ${platforms.join(', ')}...`;
+                    pollInterval = setInterval(() => pollScrapeStatus(data.job_id), 2000);
+                } else if (resp.ok) {
+                    // Synchronous completion (small scrapes)
+                    onScrapeComplete(data);
                 } else {
                     showToast(`Error: ${data.detail || 'Unknown error'}`, 'error');
-                    loadingText.textContent = `Error: ${data.detail || 'Unknown error'}`;
+                    resetScrapeUI();
                 }
-
-                // Reload page after short delay to show updated data
-                setTimeout(() => window.location.reload(), 1500);
             } catch (err) {
-                loadingText.textContent = `Error: ${err.message}`;
                 showToast(`Network error: ${err.message}`, 'error');
-                document.querySelectorAll('.btn').forEach(b => b.disabled = false);
+                resetScrapeUI();
             }
+        }
+
+        async function pollScrapeStatus(jobId) {
+            try {
+                const resp = await fetch(`/api/scrape/status/${jobId}`);
+                const data = await resp.json();
+
+                const loadingText = document.getElementById('loading-text');
+                const progressFill = document.getElementById('progress-bar-fill');
+
+                if (data.status === 'running') {
+                    loadingText.textContent = data.message || 'Scraping...';
+                    if (data.progress) {
+                        progressFill.classList.remove('indeterminate');
+                        progressFill.style.width = `${data.progress}%`;
+                    }
+                } else if (data.status === 'complete') {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    onScrapeComplete(data);
+                } else if (data.status === 'error') {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    showToast(`Scrape error: ${data.message || 'Unknown'}`, 'error');
+                    resetScrapeUI();
+                }
+            } catch (err) {
+                // Network error during poll, keep trying
+                console.warn('Poll error:', err);
+            }
+        }
+
+        function onScrapeComplete(data) {
+            const pp = data.price_points_saved || 0;
+            const opps = data.arbitrage_opportunities || 0;
+            showToast(`Scrape complete: ${pp} prices, ${opps} opportunities`, 'success');
+            resetScrapeUI();
+            // Reload page to show updated data
+            setTimeout(() => window.location.reload(), 1500);
+        }
+
+        function resetScrapeUI() {
+            document.querySelectorAll('.btn').forEach(b => b.disabled = false);
+            document.getElementById('loading-indicator').classList.remove('active');
+            document.getElementById('progress-bar').classList.remove('active');
+            const fill = document.getElementById('progress-bar-fill');
+            fill.classList.remove('indeterminate');
+            fill.style.width = '0%';
         }
 
         // ---- Dismiss alert ----
@@ -766,9 +861,6 @@
 
             rows.forEach(row => tbody.appendChild(row));
         }
-
-        // Initial sort by spread desc (already sorted by server, but ensure client state matches)
-        // sortTable(3, 'spread'); // Uncomment if needed
 
         // ---- Auto-refresh last scrape time ----
         setInterval(() => {

@@ -33,7 +33,6 @@ from config import settings
 from engine.alerter import store_alerts, send_email_alerts
 from engine.arbitrage import detect_arbitrage
 from engine.database import init_db, save_price_point, get_last_scrape_time, save_scrape_meta
-from scraper.ebay import scrape_cards as scrape_ebay
 from scraper.pricecharting import scrape_cards as scrape_pricecharting
 from scraper.tcgplayer import scrape_cards as scrape_tcgplayer
 from scraper.seed_cards import TOP_50_CARDS
@@ -81,7 +80,7 @@ async def run_scrape(
         Summary dict with counts and opportunities found.
     """
     if platforms is None:
-        platforms = ["pricecharting", "ebay", "tcgplayer"]
+        platforms = ["pricecharting", "tcgplayer"]
 
     cards = TOP_50_CARDS[:card_count]
     logger.info(
@@ -98,12 +97,6 @@ async def run_scrape(
         pc_points = await scrape_pricecharting(cards)
         all_price_points.extend(pc_points)
         logger.info("PriceCharting returned %d price points", len(pc_points))
-
-    if "ebay" in platforms:
-        logger.info("--- Scraping eBay Sold Listings ---")
-        ebay_points = await scrape_ebay(cards)
-        all_price_points.extend(ebay_points)
-        logger.info("eBay returned %d price points", len(ebay_points))
 
     if "tcgplayer" in platforms:
         logger.info("--- Scraping TCGPlayer ---")
@@ -261,8 +254,8 @@ def main():
         "--platforms",
         nargs="+",
         default=None,
-        choices=["pricecharting", "ebay", "tcgplayer"],
-        help="Platforms to scrape (default: all)",
+        choices=["pricecharting", "tcgplayer"],
+        help="Platforms to scrape (default: pricecharting, tcgplayer)",
     )
     parser.add_argument(
         "--host",

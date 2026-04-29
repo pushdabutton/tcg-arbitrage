@@ -35,25 +35,25 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.pricecharting.com/game"
 
-# Map PriceCharting price element IDs to card conditions
-# For Pokemon cards:
-#   used_price     -> Ungraded
-#   complete_price -> Grade 7 (treated as Lightly Played equivalent)
-#   new_price      -> Grade 8 (treated as Near Mint equivalent)
-#   graded_price   -> Grade 9
-#   box_only_price -> Grade 9.5
-#   manual_only_price -> PSA 10
+# Map PriceCharting price element IDs to card conditions.
+# For Pokemon cards, PriceCharting reuses their video game price IDs:
+#   used_price        -> Ungraded raw card
+#   complete_price    -> Grade 7 slab (PSA 7)
+#   new_price         -> Grade 8 slab (PSA 8)
+#   graded_price      -> Grade 9 slab (PSA 9)
+#   box_only_price    -> Grade 9.5 slab (PSA 9.5)
+#   manual_only_price -> PSA 10 slab
+#
+# CRITICAL: Graded slabs are a fundamentally different product from raw cards.
+# A PSA 10 Charizard ($1,482) is NOT the same as a raw Charizard ($26).
+# We must separate these into distinct condition categories.
 PRICE_ID_MAP = {
-    "used_price": Condition.UNGRADED,
-    "complete_price": Condition.LIGHTLY_PLAYED,  # Grade 7
-    "new_price": Condition.NEAR_MINT,            # Grade 8
-    "graded_price": Condition.NEAR_MINT,         # Grade 9
-}
-
-# These IDs are high-grade slabs (9.5, PSA 10) -- include but mark as NM
-SLAB_PRICE_IDS = {
-    "box_only_price": Condition.NEAR_MINT,       # Grade 9.5
-    "manual_only_price": Condition.NEAR_MINT,    # PSA 10
+    "used_price": Condition.UNGRADED,           # Raw ungraded card
+    "complete_price": Condition.PSA_7,           # Grade 7 slab
+    "new_price": Condition.PSA_8,                # Grade 8 slab
+    "graded_price": Condition.PSA_9,             # Grade 9 slab
+    "box_only_price": Condition.PSA_9_5,         # Grade 9.5 slab
+    "manual_only_price": Condition.PSA_10,       # PSA 10 slab
 }
 
 
@@ -73,12 +73,23 @@ def _map_condition(label: str) -> Condition | None:
     """Map PriceCharting condition labels to our enum.
 
     Returns None for entries that are not actual card prices.
+    Graded slabs get their own PSA_* conditions (not lumped with raw cards).
     """
     label = label.lower().strip()
     if "ungraded" in label:
         return Condition.UNGRADED
+    if "psa 10" in label or "gem mint" in label:
+        return Condition.PSA_10
+    if "grade 9.5" in label or "9.5" in label:
+        return Condition.PSA_9_5
+    if "grade 9" in label:
+        return Condition.PSA_9
+    if "grade 8" in label:
+        return Condition.PSA_8
+    if "grade 7" in label:
+        return Condition.PSA_7
     if "grade" in label or "graded" in label or "psa" in label:
-        return Condition.NEAR_MINT
+        return Condition.PSA_9  # Default graded to PSA 9
     if "1st edition" in label:
         return Condition.NEAR_MINT
     if "complete" in label:
