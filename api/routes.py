@@ -17,8 +17,11 @@ from engine.arbitrage import detect_arbitrage
 from engine.database import (
     dismiss_alert,
     get_all_tracked_cards,
+    get_last_scrape_time,
     get_latest_prices,
+    get_price_history,
     save_price_point,
+    save_scrape_meta,
 )
 from scraper.models import Platform, PricePoint
 from scraper.ebay import scrape_cards as scrape_ebay
@@ -47,14 +50,35 @@ async def dashboard(request: Request):
     """Main dashboard showing arbitrage opportunities."""
     alerts = get_current_alerts()
     cards = get_all_tracked_cards(settings.DB_PATH)
+    last_scrape = get_last_scrape_time(settings.DB_PATH)
+
+    # Enrich cards with latest prices for the dashboard
+    enriched_cards = []
+    for card in cards:
+        prices = get_latest_prices(
+            settings.DB_PATH, card["card_name"], card["set_name"]
+        )
+        history = get_price_history(
+            settings.DB_PATH, card["card_name"], card["set_name"], limit=10
+        )
+        enriched_cards.append(
+            {
+                "card_name": card["card_name"],
+                "set_name": card["set_name"],
+                "prices": prices,
+                "history": history,
+            }
+        )
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
             "request": request,
             "alerts": alerts,
-            "cards": cards,
+            "cards": enriched_cards,
             "total_cards": len(cards),
             "total_alerts": len(alerts),
+            "last_scrape": last_scrape,
         },
     )
 
@@ -104,6 +128,27 @@ async def api_card_prices(card_name: str, set_name: str):
     if not prices:
         raise HTTPException(status_code=404, detail="No price data for this card")
     return {"card_name": card_name, "set_name": set_name, "prices": prices}
+
+
+@router.get("/api/cards/{card_name}/{set_name}/history")
+async def api_card_history(card_name: str, set_name: str, limit: int = 20):
+    """Get price history for a specific card."""
+    history = get_price_history(settings.DB_PATH, card_name, set_name, limit=limit)
+    if not history:
+        raise HTTPException(status_code=404, detail="No price history for this card")
+    return {
+        "card_name": card_name,
+        "set_name": set_name,
+        "history": history,
+        "count": len(history),
+    }
+
+
+@router.get("/api/last-scrape")
+async def api_last_scrape():
+    """Get the timestamp of the last scrape."""
+    last = get_last_scrape_time(settings.DB_PATH)
+    return {"last_scrape": last}
 
 
 @router.post("/api/scrape")
@@ -162,6 +207,14 @@ async def api_trigger_scrape(
         except Exception:
             logger.exception("Failed to save price point")
 
+    # Record scrape metadata
+    save_scrape_meta(
+        settings.DB_PATH,
+        card_count=count,
+        platforms=platforms,
+        price_points=saved,
+    )
+
     # Detect cross-platform arbitrage
     opportunities = detect_arbitrage(all_price_points)
     alert_count = store_alerts(opportunities)
@@ -180,9 +233,11 @@ async def api_trigger_scrape(
 @router.get("/api/health")
 async def api_health():
     """Health check endpoint."""
+    last_scrape = get_last_scrape_time(settings.DB_PATH)
     return {
         "status": "ok",
         "service": "tcg-arbitrage",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "platforms": list(PLATFORM_SCRAPERS.keys()),
+        "last_scrape": last_scrape,
     }

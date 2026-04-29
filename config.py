@@ -2,7 +2,12 @@
 
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+
+# Load .env from home directory (contains AGENT_EMAIL_API_KEY etc.)
+load_dotenv(Path.home() / ".env")
+load_dotenv()  # Also check local .env
 
 
 class Settings(BaseSettings):
@@ -24,10 +29,14 @@ class Settings(BaseSettings):
 
     # Arbitrage
     ARBITRAGE_THRESHOLD_PERCENT: float = 20.0  # Flag when price diff >= 20%
+    EMAIL_ALERT_THRESHOLD_PERCENT: float = 30.0  # Send email when diff >= 30%
 
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8777
+
+    # Daemon
+    DAEMON_INTERVAL_SECONDS: int = 7200  # 2 hours between auto-scrapes
 
     model_config = {"env_prefix": "TCG_"}
 

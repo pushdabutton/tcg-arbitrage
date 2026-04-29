@@ -69,6 +69,17 @@ def init_db(db_path: Path) -> None:
                 response_body TEXT NOT NULL,
                 cached_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS scrape_meta (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                started_at TEXT NOT NULL,
+                card_count INTEGER NOT NULL,
+                platforms TEXT NOT NULL,
+                price_points INTEGER NOT NULL DEFAULT 0
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_scrape_meta_started
+                ON scrape_meta(started_at);
         """)
         conn.commit()
     finally:
@@ -228,5 +239,69 @@ def dismiss_alert(db_path: Path, alert_id: int) -> bool:
         )
         conn.commit()
         return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def save_scrape_meta(
+    db_path: Path,
+    card_count: int,
+    platforms: list[str],
+    price_points: int,
+) -> int:
+    """Record metadata about a scrape run."""
+    conn = get_connection(db_path)
+    try:
+        cur = conn.execute(
+            """INSERT INTO scrape_meta (started_at, card_count, platforms, price_points)
+               VALUES (?, ?, ?, ?)""",
+            (
+                datetime.now(timezone.utc).isoformat(),
+                card_count,
+                json.dumps(platforms),
+                price_points,
+            ),
+        )
+        conn.commit()
+        return cur.lastrowid  # type: ignore[return-value]
+    finally:
+        conn.close()
+
+
+def get_last_scrape_time(db_path: Path) -> str | None:
+    """Get the timestamp of the most recent scrape, or None if never scraped."""
+    conn = get_connection(db_path)
+    try:
+        row = conn.execute(
+            "SELECT started_at FROM scrape_meta ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return None
+        return row["started_at"]
+    finally:
+        conn.close()
+
+
+def get_price_history(
+    db_path: Path,
+    card_name: str,
+    set_name: str,
+    limit: int = 20,
+) -> list[dict]:
+    """Get price history for a card across all platforms, most recent first.
+
+    Returns list of dicts with platform, price_usd, scraped_at.
+    """
+    conn = get_connection(db_path)
+    try:
+        rows = conn.execute(
+            """SELECT platform, price_usd, scraped_at
+               FROM price_points
+               WHERE card_name = ? AND set_name = ?
+               ORDER BY scraped_at DESC
+               LIMIT ?""",
+            (card_name, set_name, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()

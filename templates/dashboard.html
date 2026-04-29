@@ -27,53 +27,74 @@
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 16px;
         }
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 20px 0;
+            padding: 16px 0;
             border-bottom: 1px solid var(--border);
-            margin-bottom: 24px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
         }
         header h1 {
             font-size: 1.5rem;
             font-weight: 700;
         }
         header h1 span { color: var(--accent); }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
         .stats {
             display: flex;
-            gap: 24px;
+            gap: 20px;
         }
         .stat {
             text-align: center;
         }
         .stat-value {
-            font-size: 1.8rem;
+            font-size: 1.6rem;
             font-weight: 700;
             color: var(--accent);
         }
         .stat-label {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: var(--text-dim);
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
+        .last-scrape {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            text-align: right;
+        }
+        .last-scrape strong {
+            color: var(--text);
+            font-weight: 600;
+        }
+
         .actions {
             display: flex;
-            gap: 12px;
-            margin-bottom: 24px;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
         }
         .btn {
-            padding: 10px 20px;
+            padding: 10px 18px;
             border: 1px solid var(--border);
             border-radius: 8px;
             background: var(--surface);
             color: var(--text);
             cursor: pointer;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             transition: all 0.2s;
+            white-space: nowrap;
         }
         .btn:hover { background: var(--surface-hover); }
         .btn-primary {
@@ -82,14 +103,21 @@
             color: #fff;
         }
         .btn-primary:hover { opacity: 0.9; }
+        .btn-scrape-now {
+            background: var(--green);
+            border-color: var(--green);
+            color: #fff;
+            font-weight: 600;
+        }
+        .btn-scrape-now:hover { opacity: 0.9; }
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
         .section-title {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             font-weight: 600;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -107,23 +135,42 @@
         .badge-yellow { background: var(--yellow); color: #000; }
 
         /* Alerts Table */
+        .table-wrapper {
+            overflow-x: auto;
+            margin-bottom: 28px;
+        }
         .alerts-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 32px;
+            min-width: 600px;
         }
         .alerts-table th {
             text-align: left;
-            padding: 12px 16px;
+            padding: 10px 14px;
             background: var(--surface);
             border-bottom: 2px solid var(--border);
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             color: var(--text-dim);
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        .alerts-table th:hover {
+            color: var(--text);
+        }
+        .alerts-table th .sort-arrow {
+            font-size: 0.65rem;
+            margin-left: 4px;
+            opacity: 0.4;
+        }
+        .alerts-table th.sorted .sort-arrow {
+            opacity: 1;
+            color: var(--accent);
         }
         .alerts-table td {
-            padding: 12px 16px;
+            padding: 10px 14px;
             border-bottom: 1px solid var(--border);
         }
         .alerts-table tr:hover td {
@@ -137,11 +184,12 @@
             color: var(--yellow);
             font-family: monospace;
         }
+        .spread-high { color: var(--red); }
         .platform-tag {
             display: inline-block;
             padding: 2px 8px;
             border-radius: 4px;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             font-weight: 500;
         }
         .platform-pricecharting { background: #1e3a5f; color: #60a5fa; }
@@ -155,17 +203,17 @@
             padding: 4px 10px;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
         }
         .dismiss-btn:hover { background: var(--surface-hover); color: var(--text); }
 
         .empty-state {
             text-align: center;
-            padding: 60px 20px;
+            padding: 50px 20px;
             color: var(--text-dim);
         }
         .empty-state h3 {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             margin-bottom: 8px;
             color: var(--text);
         }
@@ -173,24 +221,85 @@
         /* Cards Grid */
         .cards-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 16px;
-            margin-bottom: 32px;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 14px;
+            margin-bottom: 28px;
         }
         .card-item {
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 8px;
-            padding: 16px;
+            padding: 14px;
+            transition: border-color 0.2s;
+        }
+        .card-item:hover {
+            border-color: var(--accent);
+        }
+        .card-header {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+        .card-image {
+            width: 60px;
+            height: 84px;
+            border-radius: 4px;
+            object-fit: cover;
+            background: var(--surface-hover);
+            flex-shrink: 0;
+        }
+        .card-image-placeholder {
+            width: 60px;
+            height: 84px;
+            border-radius: 4px;
+            background: var(--surface-hover);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            text-align: center;
+            padding: 4px;
+        }
+        .card-info {
+            flex: 1;
+            min-width: 0;
         }
         .card-item h4 {
-            font-size: 0.95rem;
-            margin-bottom: 4px;
+            font-size: 0.9rem;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .card-item .set-name {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             color: var(--text-dim);
             margin-bottom: 8px;
+        }
+        .card-prices {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        .card-price-tag {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-weight: 600;
+        }
+
+        /* Sparkline */
+        .sparkline-container {
+            height: 30px;
+            margin-top: 6px;
+        }
+        .sparkline {
+            width: 100%;
+            height: 100%;
         }
 
         .loading {
@@ -198,6 +307,7 @@
             align-items: center;
             gap: 8px;
             color: var(--accent);
+            font-size: 0.85rem;
         }
         .loading.active { display: flex; }
         .spinner {
@@ -215,10 +325,91 @@
 
         footer {
             text-align: center;
-            padding: 24px 0;
+            padding: 20px 0;
             border-top: 1px solid var(--border);
             color: var(--text-dim);
+            font-size: 0.75rem;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 20px;
+            color: var(--text);
+            font-size: 0.9rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            z-index: 1000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .toast.success { border-color: var(--green); }
+        .toast.error { border-color: var(--red); }
+
+        /* Platform filter */
+        .platform-filters {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .platform-filter {
+            padding: 6px 12px;
+            border-radius: 6px;
             font-size: 0.8rem;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-dim);
+            transition: all 0.2s;
+        }
+        .platform-filter.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .platform-filter:hover:not(.active) {
+            background: var(--surface-hover);
+            color: var(--text);
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .container { padding: 12px; }
+            header { flex-direction: column; align-items: flex-start; }
+            header h1 { font-size: 1.2rem; }
+            .header-right { width: 100%; justify-content: space-between; }
+            .stats { gap: 16px; }
+            .stat-value { font-size: 1.3rem; }
+            .actions { flex-direction: column; }
+            .actions .btn { width: 100%; text-align: center; }
+            .platform-filters { flex-wrap: wrap; }
+            .cards-grid {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                gap: 10px;
+            }
+            .card-image, .card-image-placeholder {
+                width: 50px;
+                height: 70px;
+            }
+            .alerts-table th, .alerts-table td {
+                padding: 8px 10px;
+            }
+            .last-scrape { text-align: left; }
+        }
+        @media (max-width: 480px) {
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+            .stats { gap: 12px; }
         }
     </style>
 </head>
@@ -226,24 +417,48 @@
     <div class="container">
         <header>
             <h1><span>TCG</span> Arbitrage</h1>
-            <div class="stats">
-                <div class="stat">
-                    <div class="stat-value" id="alert-count">{{ total_alerts }}</div>
-                    <div class="stat-label">Active Alerts</div>
+            <div class="header-right">
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-value" id="alert-count">{{ total_alerts }}</div>
+                        <div class="stat-label">Active Alerts</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="card-count">{{ total_cards }}</div>
+                        <div class="stat-label">Cards Tracked</div>
+                    </div>
                 </div>
-                <div class="stat">
-                    <div class="stat-value" id="card-count">{{ total_cards }}</div>
-                    <div class="stat-label">Cards Tracked</div>
+                <div class="last-scrape" id="last-scrape-info">
+                    {% if last_scrape %}
+                    Last scrape:<br>
+                    <strong id="last-scrape-time">{{ last_scrape }}</strong>
+                    {% else %}
+                    <strong>Never scraped</strong>
+                    {% endif %}
                 </div>
             </div>
         </header>
 
         <div class="actions">
-            <button class="btn btn-primary" id="scrape-btn" onclick="triggerScrape(5)">
-                Scrape 5 Cards
+            <button class="btn btn-scrape-now" id="scrape-now-btn" onclick="triggerScrape(50)">
+                Scrape Now (All 50)
+            </button>
+            <button class="btn btn-primary" onclick="triggerScrape(5)">
+                Quick Scrape (5)
             </button>
             <button class="btn" onclick="triggerScrape(20)">Scrape 20</button>
-            <button class="btn" onclick="triggerScrape(50)">Scrape All 50</button>
+            <div class="platform-filters">
+                <span style="font-size: 0.8rem; color: var(--text-dim);">Platforms:</span>
+                <label class="platform-filter active" data-platform="pricecharting">
+                    <input type="checkbox" checked hidden> PC
+                </label>
+                <label class="platform-filter active" data-platform="tcgplayer">
+                    <input type="checkbox" checked hidden> TCGPlayer
+                </label>
+                <label class="platform-filter active" data-platform="ebay">
+                    <input type="checkbox" checked hidden> eBay
+                </label>
+            </div>
             <div class="loading" id="loading-indicator">
                 <div class="spinner"></div>
                 <span id="loading-text">Scraping...</span>
@@ -256,39 +471,42 @@
         </div>
 
         {% if alerts %}
-        <table class="alerts-table">
+        <div class="table-wrapper">
+        <table class="alerts-table" id="alerts-table">
             <thead>
                 <tr>
-                    <th>Card</th>
-                    <th>Buy</th>
-                    <th>Sell</th>
-                    <th>Spread</th>
+                    <th onclick="sortTable(0, 'text')" class="sorted">Card <span class="sort-arrow">&#9660;</span></th>
+                    <th onclick="sortTable(1, 'price')">Buy <span class="sort-arrow">&#9660;</span></th>
+                    <th onclick="sortTable(2, 'price')">Sell <span class="sort-arrow">&#9660;</span></th>
+                    <th onclick="sortTable(3, 'spread')" data-default-sort="desc">Spread <span class="sort-arrow">&#9660;</span></th>
                     <th></th>
                 </tr>
             </thead>
             <tbody id="alerts-body">
                 {% for alert in alerts %}
-                <tr id="alert-{{ alert.id }}">
+                <tr id="alert-{{ alert.id }}" data-spread="{{ alert.spread_percent }}">
                     <td>
                         <strong>{{ alert.card_name }}</strong><br>
-                        <span style="color: var(--text-dim); font-size: 0.85rem;">{{ alert.set_name }}</span>
+                        <span style="color: var(--text-dim); font-size: 0.8rem;">{{ alert.set_name }}</span>
                     </td>
                     <td>
                         <span class="price price-buy">${{ "%.2f"|format(alert.buy_price) }}</span><br>
                         <span class="platform-tag platform-{{ alert.buy_platform }}">{{ alert.buy_platform }}</span>
                         {% if alert.buy_url %}
-                        <a href="{{ alert.buy_url }}" target="_blank" style="font-size: 0.8rem; margin-left: 4px;">View</a>
+                        <a href="{{ alert.buy_url }}" target="_blank" style="font-size: 0.75rem; margin-left: 4px;">View</a>
                         {% endif %}
                     </td>
                     <td>
                         <span class="price price-sell">${{ "%.2f"|format(alert.sell_price) }}</span><br>
                         <span class="platform-tag platform-{{ alert.sell_platform }}">{{ alert.sell_platform }}</span>
                         {% if alert.sell_url %}
-                        <a href="{{ alert.sell_url }}" target="_blank" style="font-size: 0.8rem; margin-left: 4px;">View</a>
+                        <a href="{{ alert.sell_url }}" target="_blank" style="font-size: 0.75rem; margin-left: 4px;">View</a>
                         {% endif %}
                     </td>
                     <td>
-                        <span class="spread">${{ "%.2f"|format(alert.spread_usd) }} ({{ "%.1f"|format(alert.spread_percent) }}%)</span>
+                        <span class="spread {% if alert.spread_percent >= 50 %}spread-high{% endif %}">
+                            ${{ "%.2f"|format(alert.spread_usd) }} ({{ "%.1f"|format(alert.spread_percent) }}%)
+                        </span>
                     </td>
                     <td>
                         <button class="dismiss-btn" onclick="dismissAlert({{ alert.id }})">Dismiss</button>
@@ -297,15 +515,16 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}
         <div class="empty-state" id="empty-alerts">
             <h3>No arbitrage alerts yet</h3>
-            <p>Click "Scrape" to fetch prices from PriceCharting and detect opportunities.</p>
+            <p>Click "Scrape Now" to fetch prices and detect cross-platform opportunities.</p>
             <p style="margin-top:8px;">Multi-source comparison requires data from 2+ platforms.</p>
         </div>
         {% endif %}
 
-        <div class="section-title" style="margin-top: 32px;">
+        <div class="section-title" style="margin-top: 28px;">
             Tracked Cards
             <span class="badge badge-green">{{ total_cards }}</span>
         </div>
@@ -314,8 +533,52 @@
         <div class="cards-grid">
             {% for card in cards %}
             <div class="card-item">
-                <h4>{{ card.card_name }}</h4>
-                <div class="set-name">{{ card.set_name }}</div>
+                <div class="card-header">
+                    <div class="card-image-placeholder">
+                        {{ card.card_name[:3] }}
+                    </div>
+                    <div class="card-info">
+                        <h4 title="{{ card.card_name }}">{{ card.card_name }}</h4>
+                        <div class="set-name">{{ card.set_name }}</div>
+                        <div class="card-prices">
+                            {% for p in card.prices %}
+                            <span class="card-price-tag platform-{{ p.platform }}">
+                                {{ p.platform[:3].upper() }} ${{ "%.2f"|format(p.price_usd) }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% set price_vals = card.history|map(attribute='price_usd')|list %}
+                {% if price_vals|length > 1 %}
+                <div class="sparkline-container">
+                    <svg class="sparkline" viewBox="0 0 200 30" preserveAspectRatio="none">
+                        {# Reverse so oldest is left, newest is right #}
+                        {% set prices = price_vals|reverse|list %}
+                        {% set min_p = prices|min %}
+                        {% set max_p = prices|max %}
+                        {% set range_p = max_p - min_p if max_p != min_p else 1 %}
+                        {% set num_points = prices|length %}
+                        {% set step = 200 / (num_points - 1) if num_points > 1 else 200 %}
+                        <polyline
+                            fill="none"
+                            stroke="#6366f1"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            points="{% for p in prices %}{{ (loop.index0 * step)|round(1) }},{{ (28 - ((p - min_p) / range_p) * 26)|round(1) }}{% if not loop.last %} {% endif %}{% endfor %}"
+                        />
+                        <!-- Last point dot (newest price) -->
+                        {% set last_price = prices|last %}
+                        <circle
+                            cx="{{ ((num_points - 1) * step)|round(1) }}"
+                            cy="{{ (28 - ((last_price - min_p) / range_p) * 26)|round(1) }}"
+                            r="2.5"
+                            fill="#6366f1"
+                        />
+                    </svg>
+                </div>
+                {% endif %}
             </div>
             {% endfor %}
         </div>
@@ -327,55 +590,192 @@
         {% endif %}
 
         <footer>
-            TCG Arbitrage Tool &middot; MVP &middot;
-            Data from PriceCharting, TCGPlayer, eBay, Cardmarket
+            TCG Arbitrage Tool v0.3.0 &middot;
+            Data from PriceCharting, TCGPlayer, eBay &middot;
+            Sorted by spread % (highest first)
         </footer>
     </div>
 
+    <!-- Toast notification -->
+    <div class="toast" id="toast"></div>
+
     <script>
+        // ---- Platform filter state ----
+        function getSelectedPlatforms() {
+            const filters = document.querySelectorAll('.platform-filter');
+            const selected = [];
+            filters.forEach(f => {
+                if (f.classList.contains('active')) {
+                    selected.push(f.dataset.platform);
+                }
+            });
+            return selected;
+        }
+
+        document.querySelectorAll('.platform-filter').forEach(f => {
+            f.addEventListener('click', () => {
+                f.classList.toggle('active');
+            });
+        });
+
+        // ---- Toast notification ----
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => { toast.classList.remove('show'); }, 4000);
+        }
+
+        // ---- Last scrape time formatting ----
+        function formatRelativeTime(isoString) {
+            if (!isoString) return 'Never';
+            const date = new Date(isoString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMin = Math.floor(diffMs / 60000);
+            const diffHr = Math.floor(diffMin / 60);
+
+            if (diffMin < 1) return 'Just now';
+            if (diffMin < 60) return `${diffMin}m ago`;
+            if (diffHr < 24) return `${diffHr}h ${diffMin % 60}m ago`;
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        // Format the last scrape time on load
+        const lastScrapeEl = document.getElementById('last-scrape-time');
+        if (lastScrapeEl && lastScrapeEl.textContent.trim()) {
+            const raw = lastScrapeEl.textContent.trim();
+            lastScrapeEl.textContent = formatRelativeTime(raw);
+            lastScrapeEl.title = raw;
+        }
+
+        // ---- Scrape trigger ----
         async function triggerScrape(count) {
-            const btn = document.getElementById('scrape-btn');
             const loading = document.getElementById('loading-indicator');
             const loadingText = document.getElementById('loading-text');
+            const platforms = getSelectedPlatforms();
+
+            if (platforms.length === 0) {
+                showToast('Select at least one platform', 'error');
+                return;
+            }
 
             // Disable buttons during scrape
             document.querySelectorAll('.btn').forEach(b => b.disabled = true);
             loading.classList.add('active');
-            loadingText.textContent = `Scraping ${count} cards (this takes ~${count * 2}s)...`;
+            loadingText.textContent = `Scraping ${count} cards on ${platforms.join(', ')} (~${count * 2}s)...`;
 
             try {
-                const resp = await fetch(`/api/scrape?count=${count}`, { method: 'POST' });
+                const platformQuery = platforms.map(p => `platforms=${p}`).join('&');
+                const resp = await fetch(`/api/scrape?count=${count}&${platformQuery}`, { method: 'POST' });
                 const data = await resp.json();
 
-                loadingText.textContent =
-                    `Done! ${data.price_points_saved} prices, ${data.arbitrage_opportunities} opportunities`;
+                if (resp.ok) {
+                    showToast(
+                        `Scrape complete: ${data.price_points_saved} prices, ${data.arbitrage_opportunities} opportunities`,
+                        'success'
+                    );
+                    loadingText.textContent =
+                        `Done! ${data.price_points_saved} prices, ${data.arbitrage_opportunities} opportunities`;
+                } else {
+                    showToast(`Error: ${data.detail || 'Unknown error'}`, 'error');
+                    loadingText.textContent = `Error: ${data.detail || 'Unknown error'}`;
+                }
 
                 // Reload page after short delay to show updated data
                 setTimeout(() => window.location.reload(), 1500);
             } catch (err) {
                 loadingText.textContent = `Error: ${err.message}`;
+                showToast(`Network error: ${err.message}`, 'error');
                 document.querySelectorAll('.btn').forEach(b => b.disabled = false);
             }
         }
 
+        // ---- Dismiss alert ----
         async function dismissAlert(id) {
             try {
                 await fetch(`/api/alerts/${id}/dismiss`, { method: 'POST' });
                 const row = document.getElementById(`alert-${id}`);
                 if (row) {
-                    row.style.opacity = '0.3';
+                    row.style.transition = 'opacity 0.3s, transform 0.3s';
+                    row.style.opacity = '0';
+                    row.style.transform = 'translateX(20px)';
                     setTimeout(() => row.remove(), 300);
                 }
-                // Update counter
+                // Update counters
                 const badge = document.getElementById('opp-badge');
                 const counter = document.getElementById('alert-count');
                 const current = parseInt(badge.textContent) - 1;
                 badge.textContent = current;
                 counter.textContent = current;
+                showToast('Alert dismissed');
             } catch (err) {
-                console.error('Failed to dismiss:', err);
+                showToast('Failed to dismiss alert', 'error');
             }
         }
+
+        // ---- Table sorting ----
+        let currentSort = { col: 3, dir: 'desc' }; // Default: sort by spread desc
+
+        function sortTable(colIndex, type) {
+            const table = document.getElementById('alerts-table');
+            if (!table) return;
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const headers = table.querySelectorAll('th');
+
+            // Toggle direction
+            if (currentSort.col === colIndex) {
+                currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.col = colIndex;
+                currentSort.dir = 'desc';
+            }
+
+            // Update header styling
+            headers.forEach((th, i) => {
+                th.classList.toggle('sorted', i === colIndex);
+                const arrow = th.querySelector('.sort-arrow');
+                if (arrow) {
+                    arrow.innerHTML = currentSort.dir === 'asc' ? '&#9650;' : '&#9660;';
+                }
+            });
+
+            rows.sort((a, b) => {
+                let valA, valB;
+                const cellA = a.cells[colIndex];
+                const cellB = b.cells[colIndex];
+
+                if (type === 'price') {
+                    valA = parseFloat(cellA.querySelector('.price')?.textContent.replace('$', '') || '0');
+                    valB = parseFloat(cellB.querySelector('.price')?.textContent.replace('$', '') || '0');
+                } else if (type === 'spread') {
+                    valA = parseFloat(a.dataset.spread || '0');
+                    valB = parseFloat(b.dataset.spread || '0');
+                } else {
+                    valA = cellA.textContent.trim().toLowerCase();
+                    valB = cellB.textContent.trim().toLowerCase();
+                }
+
+                if (type === 'text') {
+                    const cmp = valA < valB ? -1 : valA > valB ? 1 : 0;
+                    return currentSort.dir === 'asc' ? cmp : -cmp;
+                }
+                return currentSort.dir === 'asc' ? valA - valB : valB - valA;
+            });
+
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        // Initial sort by spread desc (already sorted by server, but ensure client state matches)
+        // sortTable(3, 'spread'); // Uncomment if needed
+
+        // ---- Auto-refresh last scrape time ----
+        setInterval(() => {
+            if (lastScrapeEl && lastScrapeEl.title) {
+                lastScrapeEl.textContent = formatRelativeTime(lastScrapeEl.title);
+            }
+        }, 60000); // Update every minute
     </script>
 </body>
 </html>
