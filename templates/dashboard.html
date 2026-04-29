@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TCG Arbitrage -- Pokemon Price Alerts</title>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface-hover: #22263a;
+            --border: #2a2e3f;
+            --text: #e1e4ed;
+            --text-dim: #8b8fa3;
+            --accent: #6366f1;
+            --green: #22c55e;
+            --red: #ef4444;
+            --yellow: #eab308;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        header h1 span { color: var(--accent); }
+        .stats {
+            display: flex;
+            gap: 24px;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: var(--surface-hover); }
+        .btn-primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .badge {
+            background: var(--accent);
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-green { background: var(--green); }
+        .badge-red { background: var(--red); }
+        .badge-yellow { background: var(--yellow); color: #000; }
+
+        /* Alerts Table */
+        .alerts-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 32px;
+        }
+        .alerts-table th {
+            text-align: left;
+            padding: 12px 16px;
+            background: var(--surface);
+            border-bottom: 2px solid var(--border);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+        }
+        .alerts-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .alerts-table tr:hover td {
+            background: var(--surface-hover);
+        }
+        .price { font-weight: 600; font-family: monospace; font-size: 1rem; }
+        .price-buy { color: var(--green); }
+        .price-sell { color: var(--red); }
+        .spread {
+            font-weight: 700;
+            color: var(--yellow);
+            font-family: monospace;
+        }
+        .platform-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .platform-pricecharting { background: #1e3a5f; color: #60a5fa; }
+        .platform-tcgplayer { background: #3b1f1f; color: #fca5a5; }
+        .platform-ebay { background: #3b3b1f; color: #fde68a; }
+        .platform-cardmarket { background: #1f3b2f; color: #86efac; }
+        .dismiss-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .dismiss-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-dim);
+        }
+        .empty-state h3 {
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        /* Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .card-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .card-item h4 {
+            font-size: 0.95rem;
+            margin-bottom: 4px;
+        }
+        .card-item .set-name {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+
+        .loading {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent);
+        }
+        .loading.active { display: flex; }
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        footer {
+            text-align: center;
+            padding: 24px 0;
+            border-top: 1px solid var(--border);
+            color: var(--text-dim);
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><span>TCG</span> Arbitrage</h1>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="alert-count">{{ total_alerts }}</div>
+                    <div class="stat-label">Active Alerts</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="card-count">{{ total_cards }}</div>
+                    <div class="stat-label">Cards Tracked</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="actions">
+            <button class="btn btn-primary" id="scrape-btn" onclick="triggerScrape(5)">
+                Scrape 5 Cards
+            </button>
+            <button class="btn" onclick="triggerScrape(20)">Scrape 20</button>
+            <button class="btn" onclick="triggerScrape(50)">Scrape All 50</button>
+            <div class="loading" id="loading-indicator">
+                <div class="spinner"></div>
+                <span id="loading-text">Scraping...</span>
+            </div>
+        </div>
+
+        <div class="section-title">
+            Arbitrage Opportunities
+            <span class="badge" id="opp-badge">{{ total_alerts }}</span>
+        </div>
+
+        {% if alerts %}
+        <table class="alerts-table">
+            <thead>
+                <tr>
+                    <th>Card</th>
+                    <th>Buy</th>
+                    <th>Sell</th>
+                    <th>Spread</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="alerts-body">
+                {% for alert in alerts %}
+                <tr id="alert-{{ alert.id }}">
+                    <td>
+                        <strong>{{ alert.card_name }}</strong><br>
+                        <span style="color: var(--text-dim); font-size: 0.85rem;">{{ alert.set_name }}</span>
+                    </td>
+                    <td>
+                        <span class="price price-buy">${{ "%.2f"|format(alert.buy_price) }}</span><br>
+                        <span class="platform-tag platform-{{ alert.buy_platform }}">{{ alert.buy_platform }}</span>
+                        {% if alert.buy_url %}
+                        <a href="{{ alert.buy_url }}" target="_blank" style="font-size: 0.8rem; margin-left: 4px;">View</a>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="price price-sell">${{ "%.2f"|format(alert.sell_price) }}</span><br>
+                        <span class="platform-tag platform-{{ alert.sell_platform }}">{{ alert.sell_platform }}</span>
+                        {% if alert.sell_url %}
+                        <a href="{{ alert.sell_url }}" target="_blank" style="font-size: 0.8rem; margin-left: 4px;">View</a>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="spread">${{ "%.2f"|format(alert.spread_usd) }} ({{ "%.1f"|format(alert.spread_percent) }}%)</span>
+                    </td>
+                    <td>
+                        <button class="dismiss-btn" onclick="dismissAlert({{ alert.id }})">Dismiss</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state" id="empty-alerts">
+            <h3>No arbitrage alerts yet</h3>
+            <p>Click "Scrape" to fetch prices from PriceCharting and detect opportunities.</p>
+            <p style="margin-top:8px;">Multi-source comparison requires data from 2+ platforms.</p>
+        </div>
+        {% endif %}
+
+        <div class="section-title" style="margin-top: 32px;">
+            Tracked Cards
+            <span class="badge badge-green">{{ total_cards }}</span>
+        </div>
+
+        {% if cards %}
+        <div class="cards-grid">
+            {% for card in cards %}
+            <div class="card-item">
+                <h4>{{ card.card_name }}</h4>
+                <div class="set-name">{{ card.set_name }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <h3>No cards tracked yet</h3>
+            <p>Run a scrape to start tracking card prices.</p>
+        </div>
+        {% endif %}
+
+        <footer>
+            TCG Arbitrage Tool &middot; MVP &middot;
+            Data from PriceCharting, TCGPlayer, eBay, Cardmarket
+        </footer>
+    </div>
+
+    <script>
+        async function triggerScrape(count) {
+            const btn = document.getElementById('scrape-btn');
+            const loading = document.getElementById('loading-indicator');
+            const loadingText = document.getElementById('loading-text');
+
+            // Disable buttons during scrape
+            document.querySelectorAll('.btn').forEach(b => b.disabled = true);
+            loading.classList.add('active');
+            loadingText.textContent = `Scraping ${count} cards (this takes ~${count * 2}s)...`;
+
+            try {
+                const resp = await fetch(`/api/scrape?count=${count}`, { method: 'POST' });
+                const data = await resp.json();
+
+                loadingText.textContent =
+                    `Done! ${data.price_points_saved} prices, ${data.arbitrage_opportunities} opportunities`;
+
+                // Reload page after short delay to show updated data
+                setTimeout(() => window.location.reload(), 1500);
+            } catch (err) {
+                loadingText.textContent = `Error: ${err.message}`;
+                document.querySelectorAll('.btn').forEach(b => b.disabled = false);
+            }
+        }
+
+        async function dismissAlert(id) {
+            try {
+                await fetch(`/api/alerts/${id}/dismiss`, { method: 'POST' });
+                const row = document.getElementById(`alert-${id}`);
+                if (row) {
+                    row.style.opacity = '0.3';
+                    setTimeout(() => row.remove(), 300);
+                }
+                // Update counter
+                const badge = document.getElementById('opp-badge');
+                const counter = document.getElementById('alert-count');
+                const current = parseInt(badge.textContent) - 1;
+                badge.textContent = current;
+                counter.textContent = current;
+            } catch (err) {
+                console.error('Failed to dismiss:', err);
+            }
+        }
+    </script>
+</body>
+</html>
