@@ -71,9 +71,9 @@ async def dashboard(request: Request):
         )
 
     return templates.TemplateResponse(
+        request,
         "dashboard.html",
         {
-            "request": request,
             "alerts": alerts,
             "cards": enriched_cards,
             "total_cards": len(cards),
