@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
@@ -20,13 +21,22 @@ from engine.database import (
     save_price_point,
 )
 from scraper.models import Platform, PricePoint
+from scraper.ebay import scrape_cards as scrape_ebay
 from scraper.pricecharting import scrape_cards as scrape_pricecharting
+from scraper.tcgplayer import scrape_cards as scrape_tcgplayer
 from scraper.seed_cards import TOP_50_CARDS
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(settings.BASE_DIR / "templates"))
+
+# Map of platform name -> scrape function
+PLATFORM_SCRAPERS = {
+    "pricecharting": scrape_pricecharting,
+    "ebay": scrape_ebay,
+    "tcgplayer": scrape_tcgplayer,
+}
 
 
 # ---- HTML Pages ----
@@ -97,36 +107,70 @@ async def api_card_prices(card_name: str, set_name: str):
 
 
 @router.post("/api/scrape")
-async def api_trigger_scrape(count: int = 5):
-    """Manually trigger a scrape of the first N seed cards.
+async def api_trigger_scrape(
+    count: int = 5,
+    platforms: Optional[list[str]] = Query(default=None),
+):
+    """Manually trigger a multi-platform scrape of the first N seed cards.
 
-    Default: 5 cards (for quick testing). Max: 50.
+    Args:
+        count: Number of cards to scrape (default 5, max 50).
+        platforms: List of platforms (default: all). Options: pricecharting, ebay, tcgplayer.
     """
     count = min(count, len(TOP_50_CARDS))
     cards_to_scrape = TOP_50_CARDS[:count]
 
-    logger.info("Triggered manual scrape of %d cards", count)
+    # Default to all platforms
+    if platforms is None:
+        platforms = list(PLATFORM_SCRAPERS.keys())
 
-    # Scrape PriceCharting (primary source)
-    price_points = await scrape_pricecharting(cards_to_scrape)
+    # Validate platforms
+    invalid = [p for p in platforms if p not in PLATFORM_SCRAPERS]
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown platforms: {invalid}. Valid: {list(PLATFORM_SCRAPERS.keys())}",
+        )
+
+    logger.info(
+        "Triggered multi-platform scrape: %d cards on %s",
+        count,
+        ", ".join(platforms),
+    )
+
+    # Scrape each platform
+    all_price_points: list[PricePoint] = []
+    platform_results: dict[str, int] = {}
+
+    for platform_name in platforms:
+        scraper = PLATFORM_SCRAPERS[platform_name]
+        try:
+            points = await scraper(cards_to_scrape)
+            all_price_points.extend(points)
+            platform_results[platform_name] = len(points)
+            logger.info("%s: %d price points", platform_name, len(points))
+        except Exception:
+            logger.exception("Error scraping %s", platform_name)
+            platform_results[platform_name] = 0
 
     # Save to DB
     saved = 0
-    for pp in price_points:
+    for pp in all_price_points:
         try:
             save_price_point(settings.DB_PATH, pp)
             saved += 1
         except Exception:
             logger.exception("Failed to save price point")
 
-    # Detect arbitrage from all stored data
-    # (In MVP we detect from the just-scraped data; multi-source comes later)
-    opportunities = detect_arbitrage(price_points)
+    # Detect cross-platform arbitrage
+    opportunities = detect_arbitrage(all_price_points)
     alert_count = store_alerts(opportunities)
 
     return {
         "status": "complete",
         "cards_scraped": count,
+        "platforms_scraped": platforms,
+        "platform_results": platform_results,
         "price_points_saved": saved,
         "arbitrage_opportunities": len(opportunities),
         "alerts_stored": alert_count,
@@ -136,4 +180,9 @@ async def api_trigger_scrape(count: int = 5):
 @router.get("/api/health")
 async def api_health():
     """Health check endpoint."""
-    return {"status": "ok", "service": "tcg-arbitrage"}
+    return {
+        "status": "ok",
+        "service": "tcg-arbitrage",
+        "version": "0.2.0",
+        "platforms": list(PLATFORM_SCRAPERS.keys()),
+    }

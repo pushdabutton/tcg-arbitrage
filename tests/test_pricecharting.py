@@ -52,3 +52,24 @@ class TestMapCondition:
 
     def test_empty(self):
         assert _map_condition("") == Condition.UNGRADED
+
+    def test_box_only_returns_none(self):
+        assert _map_condition("Box Only") is None
+
+    def test_manual_only_returns_none(self):
+        assert _map_condition("Manual Only") is None
+
+    def test_complete(self):
+        assert _map_condition("Complete") == Condition.UNGRADED
+
+    def test_new(self):
+        assert _map_condition("New/Sealed") == Condition.NEAR_MINT
+
+    def test_used(self):
+        assert _map_condition("Used") == Condition.LIGHTLY_PLAYED
+
+    def test_grade_7(self):
+        assert _map_condition("Grade 7") == Condition.NEAR_MINT
+
+    def test_grade_9(self):
+        assert _map_condition("Grade 9") == Condition.NEAR_MINT

@@ -1,7 +1,21 @@
 """PriceCharting scraper -- primary data source for MVP.
 
 URL pattern: https://www.pricecharting.com/game/{pricecharting_id}
-The page contains a structured price table with conditions and prices.
+
+PriceCharting's price table for Pokemon cards has columns:
+    Ungraded | Grade 7 | Grade 8 | Grade 9 | Grade 9.5 | PSA 10
+
+Prices are in td elements with specific IDs:
+    used_price     = Ungraded card price
+    complete_price = Grade 7 price
+    new_price      = Grade 8 price
+    graded_price   = Grade 9 price
+    box_only_price = Grade 9.5 price
+    manual_only_price = PSA 10 price
+
+For video games these IDs mean different things, but for Pokemon cards
+they map to grading tiers. We focus on used_price (ungraded) as the
+primary comparable price, plus graded_price for graded comparisons.
 """
 
 from __future__ import annotations
@@ -21,6 +35,27 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.pricecharting.com/game"
 
+# Map PriceCharting price element IDs to card conditions
+# For Pokemon cards:
+#   used_price     -> Ungraded
+#   complete_price -> Grade 7 (treated as Lightly Played equivalent)
+#   new_price      -> Grade 8 (treated as Near Mint equivalent)
+#   graded_price   -> Grade 9
+#   box_only_price -> Grade 9.5
+#   manual_only_price -> PSA 10
+PRICE_ID_MAP = {
+    "used_price": Condition.UNGRADED,
+    "complete_price": Condition.LIGHTLY_PLAYED,  # Grade 7
+    "new_price": Condition.NEAR_MINT,            # Grade 8
+    "graded_price": Condition.NEAR_MINT,         # Grade 9
+}
+
+# These IDs are high-grade slabs (9.5, PSA 10) -- include but mark as NM
+SLAB_PRICE_IDS = {
+    "box_only_price": Condition.NEAR_MINT,       # Grade 9.5
+    "manual_only_price": Condition.NEAR_MINT,    # PSA 10
+}
+
 
 def _parse_price(text: str) -> float | None:
     """Extract a dollar amount from text like '$12.34' or 'N/A'."""
@@ -34,16 +69,26 @@ def _parse_price(text: str) -> float | None:
     return None
 
 
-def _map_condition(label: str) -> Condition:
-    """Map PriceCharting condition labels to our enum."""
+def _map_condition(label: str) -> Condition | None:
+    """Map PriceCharting condition labels to our enum.
+
+    Returns None for entries that are not actual card prices.
+    """
     label = label.lower().strip()
     if "ungraded" in label:
         return Condition.UNGRADED
     if "grade" in label or "graded" in label or "psa" in label:
-        return Condition.NEAR_MINT  # graded cards are ~NM equivalent
+        return Condition.NEAR_MINT
     if "1st edition" in label:
         return Condition.NEAR_MINT
-    # Default
+    if "complete" in label:
+        return Condition.UNGRADED
+    if "new" in label or "sealed" in label:
+        return Condition.NEAR_MINT
+    if "used" in label or "loose" in label:
+        return Condition.LIGHTLY_PLAYED
+    if "box only" in label or "manual only" in label:
+        return None
     return Condition.UNGRADED
 
 
@@ -53,7 +98,8 @@ async def scrape_card(
 ) -> list[PricePoint]:
     """Scrape price data for a single card from PriceCharting.
 
-    Returns a list of PricePoint objects (one per condition/variant found).
+    Returns a list of PricePoint objects. Focuses on the ungraded price
+    as the primary comparable price across platforms.
     """
     if not card.pricecharting_id:
         logger.warning("No pricecharting_id for %s", card.display_name)
@@ -77,81 +123,94 @@ async def scrape_card(
     soup = BeautifulSoup(resp.text, "html.parser")
     now = datetime.now(timezone.utc)
 
-    # PriceCharting stores prices in a table with id="price_data"
-    # or in individual price boxes with class "price"
-    # Try the structured price table first
-    price_table = soup.find("table", id="price_data")
-    if price_table:
-        for row in price_table.find_all("tr"):
-            cells = row.find_all("td")
-            if len(cells) >= 2:
-                label = cells[0].get_text(strip=True)
-                price_text = cells[1].get_text(strip=True)
-                price = _parse_price(price_text)
-                if price is not None and price > 0:
-                    results.append(
-                        PricePoint(
-                            card_name=card.name,
-                            set_name=card.set_name,
-                            platform=Platform.PRICECHARTING,
-                            price_usd=price,
-                            condition=_map_condition(label),
-                            url=url,
-                            scraped_at=now,
-                        )
-                    )
+    # Primary strategy: Use specific price element IDs
+    # These are the most reliable way to extract prices from PriceCharting
+    for price_id, condition in PRICE_ID_MAP.items():
+        el = soup.find(id=price_id)
+        if el:
+            # The price is in a span with class "price js-price" inside the td
+            price_span = el.find("span", class_="price")
+            if price_span:
+                price = _parse_price(price_span.get_text())
+            else:
+                # Fallback: try the first js-price span (but not the change span)
+                price_span = el.find("span", class_="js-price")
+                if price_span:
+                    price = _parse_price(price_span.get_text())
+                else:
+                    price = _parse_price(el.get_text())
 
-    # Also try the js-price spans used on some pages
-    if not results:
-        price_spans = soup.find_all("span", class_="js-price")
-        for span in price_spans:
-            price = _parse_price(span.get_text())
             if price is not None and price > 0:
-                # Try to find the label from parent or sibling
-                parent_dt = span.find_parent("dt") or span.find_parent("div")
-                label = ""
-                if parent_dt:
-                    prev = parent_dt.find_previous_sibling()
-                    if prev:
-                        label = prev.get_text(strip=True)
-
                 results.append(
                     PricePoint(
                         card_name=card.name,
                         set_name=card.set_name,
                         platform=Platform.PRICECHARTING,
                         price_usd=price,
-                        condition=_map_condition(label),
+                        condition=condition,
                         url=url,
                         scraped_at=now,
                     )
                 )
 
-    # Fallback: look for the main price display
+    # If we got no results from price IDs, try the table headers approach
     if not results:
-        # Many pages show price in <span id="used_price"> or <span id="complete_price">
-        for price_id in ("used_price", "complete_price", "new_price", "graded_price"):
-            el = soup.find(id=price_id)
-            if el:
-                price = _parse_price(el.get_text())
-                if price is not None and price > 0:
-                    cond = Condition.UNGRADED
-                    if "graded" in price_id:
-                        cond = Condition.NEAR_MINT
-                    results.append(
-                        PricePoint(
-                            card_name=card.name,
-                            set_name=card.set_name,
-                            platform=Platform.PRICECHARTING,
-                            price_usd=price,
-                            condition=cond,
-                            url=url,
-                            scraped_at=now,
-                        )
-                    )
+        price_table = soup.find("table", id="price_data")
+        if price_table:
+            # Get headers from thead
+            headers = []
+            thead = price_table.find("thead")
+            if thead:
+                header_row = thead.find("tr")
+                if header_row:
+                    headers = [
+                        th.get_text(strip=True)
+                        for th in header_row.find_all("th")
+                    ]
+
+            # Get prices from first tbody row
+            tbody = price_table.find("tbody")
+            if tbody:
+                data_row = tbody.find("tr")
+                if data_row:
+                    cells = data_row.find_all("td")
+                    for i, cell in enumerate(cells):
+                        price_span = cell.find("span", class_="price")
+                        if not price_span:
+                            price_span = cell.find("span", class_="js-price")
+                        if price_span:
+                            price = _parse_price(price_span.get_text())
+                            if price is not None and price > 0:
+                                # Map header to condition
+                                label = headers[i] if i < len(headers) else ""
+                                condition = _map_condition(label)
+                                if condition is not None:
+                                    results.append(
+                                        PricePoint(
+                                            card_name=card.name,
+                                            set_name=card.set_name,
+                                            platform=Platform.PRICECHARTING,
+                                            price_usd=price,
+                                            condition=condition,
+                                            url=url,
+                                            scraped_at=now,
+                                        )
+                                    )
 
     if not results:
         logger.warning("No prices found for %s at %s", card.display_name, url)
+    else:
+        # Log the primary (ungraded) price
+        ungraded = next(
+            (r for r in results if r.condition == Condition.UNGRADED),
+            results[0],
+        )
+        logger.info(
+            "PriceCharting: %s = %s (%s)",
+            card.display_name,
+            ungraded.display_price,
+            ungraded.condition.value,
+        )
 
     return results
 
@@ -181,14 +240,19 @@ async def scrape_cards(
     ) as client:
         for i, card in enumerate(cards):
             logger.info(
-                "[%d/%d] Scraping %s ...", i + 1, len(cards), card.display_name
+                "[%d/%d] PriceCharting: %s ...",
+                i + 1,
+                len(cards),
+                card.display_name,
             )
-            results = await scrape_card(client, card)
-            all_results.extend(results)
+            card_results = await scrape_card(client, card)
+            all_results.extend(card_results)
             if i < len(cards) - 1:
                 await asyncio.sleep(delay)
 
     logger.info(
-        "Scraped %d price points from %d cards", len(all_results), len(cards)
+        "PriceCharting: %d price points from %d cards",
+        len(all_results),
+        len(cards),
     )
     return all_results
