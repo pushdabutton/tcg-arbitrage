@@ -5,7 +5,7 @@ Run with:
     python main.py --scrape                 # Scrape first, then start server
     python main.py --scrape-only            # Scrape and exit (no server)
     python main.py --host 0.0.0.0 --port 8777  # Bind to specific host/port
-    python main.py --daemon                 # Daemon mode: scrape + server + auto-rescrape every 2h
+    python main.py --daemon                 # Daemon mode: server starts IMMEDIATELY, scrape runs in background
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ from engine.database import init_db, save_price_point, get_last_scrape_time, sav
 from scraper.pricecharting import scrape_cards as scrape_pricecharting
 from scraper.tcgplayer import scrape_cards as scrape_tcgplayer
 from scraper.seed_cards import TOP_50_CARDS
+from shared_state import initial_scrape_status
 
 logging.basicConfig(
     level=logging.INFO,
@@ -305,29 +306,53 @@ def main():
         return
 
     if args.daemon:
-        # Daemon mode: initial scrape, then start server with background rescrape loop
+        # Daemon mode: server starts IMMEDIATELY, initial scrape runs in background
         logger.info("=== DAEMON MODE ===")
+        logger.info("Server will start immediately; initial scrape runs in background thread")
 
-        # Initial scrape (all 50 cards)
         daemon_card_count = min(50, len(TOP_50_CARDS))
-        asyncio.run(
-            run_scrape(
-                daemon_card_count,
-                platforms=args.platforms,
-                send_alerts=True,
-                alert_threshold=args.alert_threshold,
-            )
+
+        # Set status BEFORE launching thread so dashboard immediately shows banner
+        initial_scrape_status["in_progress"] = True
+        initial_scrape_status["message"] = (
+            f"Initial scrape of {daemon_card_count} cards starting..."
         )
 
-        # Start background scrape thread
+        def _initial_scrape_then_loop() -> None:
+            """Run the initial scrape, then enter the periodic rescrape loop."""
+            # Brief pause to let the server fully bind and accept connections
+            time.sleep(2)
+            logger.info("=== DAEMON: Starting initial background scrape ===")
+            try:
+                asyncio.run(
+                    run_scrape(
+                        daemon_card_count,
+                        platforms=args.platforms,
+                        send_alerts=True,
+                        alert_threshold=args.alert_threshold,
+                    )
+                )
+                initial_scrape_status["completed"] = True
+                initial_scrape_status["message"] = "Initial scrape complete"
+                logger.info("=== DAEMON: Initial scrape complete ===")
+            except Exception:
+                logger.exception("=== DAEMON: Initial scrape FAILED ===")
+                initial_scrape_status["message"] = "Initial scrape failed"
+            finally:
+                initial_scrape_status["in_progress"] = False
+
+            # -- Periodic rescrape loop --
+            _daemon_scrape_loop(
+                daemon_card_count, args.platforms, args.interval, args.alert_threshold,
+            )
+
         scrape_thread = threading.Thread(
-            target=_daemon_scrape_loop,
-            args=(daemon_card_count, args.platforms, args.interval, args.alert_threshold),
+            target=_initial_scrape_then_loop,
             daemon=True,
             name="daemon-scraper",
         )
         scrape_thread.start()
-        logger.info("Background scraper thread started (every %d seconds)", args.interval)
+        logger.info("Background scraper thread launched (initial + every %d seconds)", args.interval)
     elif args.scrape:
         asyncio.run(
             run_scrape(

@@ -327,6 +327,29 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        /* Scrape-in-progress banner */
+        .scrape-banner {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            background: #2a2200;
+            border: 1px solid var(--yellow);
+            border-radius: 8px;
+            color: var(--yellow);
+            font-size: 0.9rem;
+        }
+        .scrape-banner strong {
+            color: var(--text);
+            font-size: 1rem;
+        }
+        .scrape-banner .spinner {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
         a { color: var(--accent); text-decoration: none; }
         a:hover { text-decoration: underline; }
 
@@ -473,6 +496,16 @@
                 </div>
             </div>
         </header>
+
+        {% if scrape_in_progress %}
+        <div class="scrape-banner" id="scrape-banner">
+            <div class="spinner" style="border-top-color: var(--yellow);"></div>
+            <div>
+                <strong>Initial scrape in progress...</strong><br>
+                <span id="scrape-banner-msg">{{ scrape_message or 'Fetching prices from all platforms. This page will auto-refresh when data is ready.' }}</span>
+            </div>
+        </div>
+        {% endif %}
 
         <div class="actions">
             <button class="btn btn-scrape-now" id="scrape-now-btn" onclick="triggerScrape(10)">
@@ -868,6 +901,32 @@
                 lastScrapeEl.textContent = formatRelativeTime(lastScrapeEl.title);
             }
         }, 60000); // Update every minute
+
+        // ---- Poll for initial scrape completion and auto-refresh ----
+        (function() {
+            const banner = document.getElementById('scrape-banner');
+            if (!banner) return;  // No banner = no initial scrape running
+
+            const bannerMsg = document.getElementById('scrape-banner-msg');
+            const pollId = setInterval(async () => {
+                try {
+                    const resp = await fetch('/api/initial-scrape-status');
+                    const data = await resp.json();
+
+                    if (bannerMsg && data.message) {
+                        bannerMsg.textContent = data.message;
+                    }
+
+                    if (!data.in_progress) {
+                        // Scrape finished (success or failure) -- reload to show data
+                        clearInterval(pollId);
+                        window.location.reload();
+                    }
+                } catch (err) {
+                    console.warn('Initial scrape poll error:', err);
+                }
+            }, 5000);  // Poll every 5 seconds
+        })();
     </script>
 </body>
 </html>

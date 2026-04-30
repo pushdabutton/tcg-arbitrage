@@ -57,9 +57,15 @@ DASHBOARD_CARD_LIMIT = 20
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     """Main dashboard showing arbitrage opportunities."""
+    from shared_state import initial_scrape_status
+
     alerts = get_current_alerts()
     cards = get_all_tracked_cards(settings.DB_PATH)
     last_scrape = get_last_scrape_time(settings.DB_PATH)
+
+    # Determine if the initial scrape is still running (no data yet)
+    scrape_in_progress = initial_scrape_status.get("in_progress", False)
+    scrape_message = initial_scrape_status.get("message", "")
 
     # Limit cards displayed to prevent OOM on large datasets
     display_cards = cards[:DASHBOARD_CARD_LIMIT]
@@ -91,6 +97,8 @@ async def dashboard(request: Request):
             "total_cards": len(cards),
             "total_alerts": len(alerts),
             "last_scrape": last_scrape,
+            "scrape_in_progress": scrape_in_progress,
+            "scrape_message": scrape_message,
         },
     )
 
@@ -351,7 +359,22 @@ async def api_health():
     return {
         "status": "ok",
         "service": "tcg-arbitrage",
-        "version": "0.4.0",
+        "version": "0.5.0",
         "platforms": list(PLATFORM_SCRAPERS.keys()),
         "last_scrape": last_scrape,
+    }
+
+
+@router.get("/api/initial-scrape-status")
+async def api_initial_scrape_status():
+    """Check if the initial background scrape is still running.
+
+    Used by the dashboard to auto-refresh once data is available.
+    """
+    from shared_state import initial_scrape_status
+
+    return {
+        "in_progress": initial_scrape_status.get("in_progress", False),
+        "completed": initial_scrape_status.get("completed", False),
+        "message": initial_scrape_status.get("message", ""),
     }
